@@ -1,149 +1,312 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Label } from '@/components/ui/label';
 import Icon from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
-type Message = {
+const API_AUTH = 'https://functions.poehali.dev/4180a42c-eacb-4992-b4dd-c3cfc8892b95';
+const API_USERS = 'https://functions.poehali.dev/82e3dcce-7cee-4400-acc2-c03735e35795';
+
+type User = {
   id: number;
-  text: string;
-  sender: 'me' | 'other';
-  time: string;
+  username: string;
+  email: string;
+  avatar_url: string;
+  status: string;
 };
 
-type Chat = {
+type SearchedUser = {
   id: number;
-  name: string;
-  avatar: string;
-  lastMessage: string;
-  time: string;
-  unread: number;
-  online: boolean;
-};
-
-type Contact = {
-  id: number;
-  name: string;
-  avatar: string;
+  username: string;
+  avatar_url: string;
   status: string;
   online: boolean;
 };
 
-const mockChats: Chat[] = [
-  {
-    id: 1,
-    name: 'Анна Смирнова',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anna',
-    lastMessage: 'Привет! Как дела?',
-    time: '14:23',
-    unread: 3,
-    online: true,
-  },
-  {
-    id: 2,
-    name: 'Дмитрий Иванов',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dmitry',
-    lastMessage: 'Отправил документы',
-    time: '12:15',
-    unread: 0,
-    online: false,
-  },
-  {
-    id: 3,
-    name: 'Елена Петрова',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Elena',
-    lastMessage: 'Созвонимся завтра?',
-    time: 'Вчера',
-    unread: 1,
-    online: true,
-  },
-  {
-    id: 4,
-    name: 'Команда разработки',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Team',
-    lastMessage: 'Новая задача в бэклоге',
-    time: 'Вчера',
-    unread: 0,
-    online: false,
-  },
-];
-
-const mockContacts: Contact[] = [
-  {
-    id: 1,
-    name: 'Анна Смирнова',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Anna',
-    status: 'В сети',
-    online: true,
-  },
-  {
-    id: 2,
-    name: 'Дмитрий Иванов',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Dmitry',
-    status: 'Был в сети 2 часа назад',
-    online: false,
-  },
-  {
-    id: 3,
-    name: 'Елена Петрова',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Elena',
-    status: 'В сети',
-    online: true,
-  },
-  {
-    id: 4,
-    name: 'Сергей Козлов',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Sergey',
-    status: 'Был в сети вчера',
-    online: false,
-  },
-  {
-    id: 5,
-    name: 'Мария Волкова',
-    avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=Maria',
-    status: 'В сети',
-    online: true,
-  },
-];
-
-const mockMessages: Message[] = [
-  { id: 1, text: 'Привет! Как дела?', sender: 'other', time: '14:20' },
-  { id: 2, text: 'Привет! Всё отлично, спасибо!', sender: 'me', time: '14:21' },
-  { id: 3, text: 'Что нового?', sender: 'other', time: '14:22' },
-  { id: 4, text: 'Работаю над новым проектом', sender: 'me', time: '14:22' },
-  { id: 5, text: 'Звучит интересно! Расскажешь подробнее?', sender: 'other', time: '14:23' },
-];
-
 const Index = () => {
-  const [activeSection, setActiveSection] = useState<'chats' | 'contacts' | 'profile' | 'settings'>('chats');
-  const [selectedChat, setSelectedChat] = useState<Chat | null>(mockChats[0]);
-  const [messages, setMessages] = useState<Message[]>(mockMessages);
-  const [newMessage, setNewMessage] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
+  const { toast } = useToast();
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [showLogin, setShowLogin] = useState(true);
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string>('');
 
-  const handleSendMessage = () => {
-    if (newMessage.trim()) {
-      const message: Message = {
-        id: messages.length + 1,
-        text: newMessage,
-        sender: 'me',
-        time: new Date().toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' }),
-      };
-      setMessages([...messages, message]);
-      setNewMessage('');
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginPassword, setLoginPassword] = useState('');
+  
+  const [registerEmail, setRegisterEmail] = useState('');
+  const [registerUsername, setRegisterUsername] = useState('');
+  const [registerPassword, setRegisterPassword] = useState('');
+
+  const [activeSection, setActiveSection] = useState<'chats' | 'contacts' | 'profile' | 'settings'>('contacts');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchedUser[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+
+  useEffect(() => {
+    const savedToken = localStorage.getItem('token');
+    const savedUser = localStorage.getItem('user');
+    
+    if (savedToken && savedUser) {
+      setToken(savedToken);
+      setCurrentUser(JSON.parse(savedUser));
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (searchQuery.length >= 2) {
+      const timeoutId = setTimeout(() => {
+        searchUsers();
+      }, 500);
+      return () => clearTimeout(timeoutId);
+    } else {
+      setSearchResults([]);
+    }
+  }, [searchQuery]);
+
+  const searchUsers = async () => {
+    setIsSearching(true);
+    try {
+      const response = await fetch(`${API_USERS}?q=${encodeURIComponent(searchQuery)}`);
+      const data = await response.json();
+      setSearchResults(data.users || []);
+    } catch (error) {
+      toast({
+        title: 'Ошибка поиска',
+        description: 'Не удалось найти пользователей',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSearching(false);
     }
   };
 
-  const filteredChats = mockChats.filter((chat) =>
-    chat.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const response = await fetch(API_AUTH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'login',
+          email: loginEmail,
+          password: loginPassword,
+        }),
+      });
 
-  const filteredContacts = mockContacts.filter((contact) =>
-    contact.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+      const data = await response.json();
+
+      if (response.ok) {
+        setToken(data.token);
+        setCurrentUser(data.user);
+        setIsAuthenticated(true);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        toast({
+          title: 'Добро пожаловать!',
+          description: `Вы вошли как ${data.user.username}`,
+        });
+      } else {
+        toast({
+          title: 'Ошибка входа',
+          description: data.error || 'Проверьте email и пароль',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось выполнить вход',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRegister = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const response = await fetch(API_AUTH, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'register',
+          email: registerEmail,
+          username: registerUsername,
+          password: registerPassword,
+        }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        setToken(data.token);
+        setCurrentUser(data.user);
+        setIsAuthenticated(true);
+        localStorage.setItem('token', data.token);
+        localStorage.setItem('user', JSON.stringify(data.user));
+        
+        toast({
+          title: 'Регистрация успешна!',
+          description: `Добро пожаловать, ${data.user.username}!`,
+        });
+      } else {
+        toast({
+          title: 'Ошибка регистрации',
+          description: data.error || 'Проверьте введенные данные',
+          variant: 'destructive',
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Ошибка',
+        description: 'Не удалось выполнить регистрацию',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    setCurrentUser(null);
+    setToken('');
+    localStorage.removeItem('token');
+    localStorage.removeItem('user');
+    toast({
+      title: 'Выход выполнен',
+      description: 'До скорой встречи!',
+    });
+  };
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md animate-fade-in">
+          <CardHeader className="text-center">
+            <div className="w-20 h-20 mx-auto mb-4 rounded-2xl gradient-primary flex items-center justify-center text-white font-bold text-3xl">
+              M
+            </div>
+            <CardTitle className="text-3xl bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
+              {showLogin ? 'Вход' : 'Регистрация'}
+            </CardTitle>
+            <CardDescription>
+              {showLogin ? 'Войдите в свой аккаунт' : 'Создайте новый аккаунт'}
+            </CardDescription>
+          </CardHeader>
+          
+          <CardContent>
+            {showLogin ? (
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="login-email">Email</Label>
+                  <Input
+                    id="login-email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={loginEmail}
+                    onChange={(e) => setLoginEmail(e.target.value)}
+                    required
+                    className="rounded-xl"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="login-password">Пароль</Label>
+                  <Input
+                    id="login-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={loginPassword}
+                    onChange={(e) => setLoginPassword(e.target.value)}
+                    required
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <Button type="submit" className="w-full rounded-xl gradient-primary text-white hover:opacity-90">
+                  Войти
+                </Button>
+                
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full rounded-xl"
+                  onClick={() => setShowLogin(false)}
+                >
+                  Нет аккаунта? Зарегистрироваться
+                </Button>
+              </form>
+            ) : (
+              <form onSubmit={handleRegister} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="register-email">Email</Label>
+                  <Input
+                    id="register-email"
+                    type="email"
+                    placeholder="your@email.com"
+                    value={registerEmail}
+                    onChange={(e) => setRegisterEmail(e.target.value)}
+                    required
+                    className="rounded-xl"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="register-username">Никнейм</Label>
+                  <Input
+                    id="register-username"
+                    type="text"
+                    placeholder="username"
+                    value={registerUsername}
+                    onChange={(e) => setRegisterUsername(e.target.value)}
+                    required
+                    minLength={3}
+                    maxLength={50}
+                    className="rounded-xl"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <Label htmlFor="register-password">Пароль</Label>
+                  <Input
+                    id="register-password"
+                    type="password"
+                    placeholder="••••••••"
+                    value={registerPassword}
+                    onChange={(e) => setRegisterPassword(e.target.value)}
+                    required
+                    minLength={6}
+                    className="rounded-xl"
+                  />
+                </div>
+
+                <Button type="submit" className="w-full rounded-xl gradient-primary text-white hover:opacity-90">
+                  Зарегистрироваться
+                </Button>
+                
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full rounded-xl"
+                  onClick={() => setShowLogin(true)}
+                >
+                  Уже есть аккаунт? Войти
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-screen bg-background overflow-hidden">
@@ -155,18 +318,6 @@ const Index = () => {
         <Separator className="w-12" />
 
         <nav className="flex flex-col gap-4">
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'w-12 h-12 rounded-xl transition-all',
-              activeSection === 'chats' && 'bg-primary text-primary-foreground'
-            )}
-            onClick={() => setActiveSection('chats')}
-          >
-            <Icon name="MessageSquare" size={24} />
-          </Button>
-
           <Button
             variant="ghost"
             size="icon"
@@ -209,6 +360,7 @@ const Index = () => {
             variant="ghost"
             size="icon"
             className="w-12 h-12 rounded-xl transition-all hover:bg-destructive hover:text-destructive-foreground"
+            onClick={handleLogout}
           >
             <Icon name="LogOut" size={24} />
           </Button>
@@ -218,134 +370,105 @@ const Index = () => {
       <div className="w-96 bg-card border-r border-border flex flex-col">
         <div className="p-4 border-b border-border">
           <h2 className="text-2xl font-bold mb-4 bg-gradient-to-r from-primary via-secondary to-accent bg-clip-text text-transparent">
-            {activeSection === 'chats' && 'Чаты'}
-            {activeSection === 'contacts' && 'Контакты'}
+            {activeSection === 'contacts' && 'Поиск пользователей'}
             {activeSection === 'profile' && 'Профиль'}
             {activeSection === 'settings' && 'Настройки'}
           </h2>
 
-          <div className="relative">
-            <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Поиск..."
-              className="pl-10 bg-background border-border rounded-xl"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-            />
-          </div>
+          {activeSection === 'contacts' && (
+            <div className="relative">
+              <Icon name="Search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Найти по нику..."
+                className="pl-10 bg-background border-border rounded-xl"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+            </div>
+          )}
         </div>
 
         <ScrollArea className="flex-1">
-          {activeSection === 'chats' && (
-            <div className="p-2">
-              {filteredChats.map((chat) => (
-                <button
-                  key={chat.id}
-                  className={cn(
-                    'w-full p-3 rounded-xl flex items-center gap-3 transition-all hover:bg-muted mb-2 animate-fade-in',
-                    selectedChat?.id === chat.id && 'bg-muted'
-                  )}
-                  onClick={() => setSelectedChat(chat)}
-                >
-                  <div className="relative">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={chat.avatar} />
-                      <AvatarFallback>{chat.name[0]}</AvatarFallback>
-                    </Avatar>
-                    {chat.online && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card"></span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 text-left overflow-hidden">
-                    <div className="flex justify-between items-center mb-1">
-                      <h3 className="font-semibold text-sm">{chat.name}</h3>
-                      <span className="text-xs text-muted-foreground">{chat.time}</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground truncate">{chat.lastMessage}</p>
-                  </div>
-
-                  {chat.unread > 0 && (
-                    <div className="w-6 h-6 rounded-full gradient-primary flex items-center justify-center text-white text-xs font-bold">
-                      {chat.unread}
-                    </div>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-
           {activeSection === 'contacts' && (
             <div className="p-2">
-              {filteredContacts.map((contact) => (
-                <div
-                  key={contact.id}
-                  className="w-full p-3 rounded-xl flex items-center gap-3 transition-all hover:bg-muted mb-2 animate-fade-in"
-                >
-                  <div className="relative">
-                    <Avatar className="w-12 h-12">
-                      <AvatarImage src={contact.avatar} />
-                      <AvatarFallback>{contact.name[0]}</AvatarFallback>
-                    </Avatar>
-                    {contact.online && (
-                      <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card"></span>
-                    )}
-                  </div>
-
-                  <div className="flex-1 text-left overflow-hidden">
-                    <h3 className="font-semibold text-sm mb-1">{contact.name}</h3>
-                    <p className="text-xs text-muted-foreground">{contact.status}</p>
-                  </div>
-
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="rounded-full hover:bg-primary hover:text-primary-foreground"
-                  >
-                    <Icon name="MessageCircle" size={18} />
-                  </Button>
+              {isSearching ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Icon name="Loader2" size={32} className="animate-spin mx-auto mb-2" />
+                  Поиск...
                 </div>
-              ))}
+              ) : searchResults.length > 0 ? (
+                searchResults.map((user) => (
+                  <div
+                    key={user.id}
+                    className="w-full p-3 rounded-xl flex items-center gap-3 transition-all hover:bg-muted mb-2 animate-fade-in"
+                  >
+                    <div className="relative">
+                      <Avatar className="w-12 h-12">
+                        <AvatarImage src={user.avatar_url} />
+                        <AvatarFallback>{user.username[0]}</AvatarFallback>
+                      </Avatar>
+                      {user.online && (
+                        <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-card"></span>
+                      )}
+                    </div>
+
+                    <div className="flex-1 text-left overflow-hidden">
+                      <h3 className="font-semibold text-sm mb-1">@{user.username}</h3>
+                      <p className="text-xs text-muted-foreground truncate">{user.status}</p>
+                    </div>
+
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="rounded-full hover:bg-primary hover:text-primary-foreground"
+                    >
+                      <Icon name="MessageCircle" size={18} />
+                    </Button>
+                  </div>
+                ))
+              ) : searchQuery.length >= 2 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Icon name="UserX" size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>Пользователи не найдены</p>
+                </div>
+              ) : (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Icon name="Search" size={48} className="mx-auto mb-2 opacity-50" />
+                  <p>Начните вводить никнейм</p>
+                </div>
+              )}
             </div>
           )}
 
-          {activeSection === 'profile' && (
+          {activeSection === 'profile' && currentUser && (
             <div className="p-6 animate-fade-in">
               <div className="flex flex-col items-center gap-4 mb-6">
                 <div className="relative">
                   <Avatar className="w-24 h-24">
-                    <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Me" />
-                    <AvatarFallback>Я</AvatarFallback>
+                    <AvatarImage src={currentUser.avatar_url} />
+                    <AvatarFallback>{currentUser.username[0]}</AvatarFallback>
                   </Avatar>
                   <span className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 rounded-full border-4 border-card"></span>
                 </div>
-                <h3 className="text-xl font-bold">Вы</h3>
-                <p className="text-sm text-muted-foreground">@your_username</p>
+                <h3 className="text-xl font-bold">{currentUser.username}</h3>
+                <p className="text-sm text-muted-foreground">@{currentUser.username}</p>
               </div>
 
               <div className="space-y-4">
                 <div className="p-4 rounded-xl bg-muted">
                   <div className="flex items-center gap-3 mb-2">
-                    <Icon name="Phone" size={18} className="text-primary" />
-                    <span className="text-sm font-medium">Телефон</span>
-                  </div>
-                  <p className="text-sm text-muted-foreground ml-8">+7 999 123 45 67</p>
-                </div>
-
-                <div className="p-4 rounded-xl bg-muted">
-                  <div className="flex items-center gap-3 mb-2">
                     <Icon name="Mail" size={18} className="text-secondary" />
                     <span className="text-sm font-medium">Email</span>
                   </div>
-                  <p className="text-sm text-muted-foreground ml-8">user@example.com</p>
+                  <p className="text-sm text-muted-foreground ml-8">{currentUser.email}</p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-muted">
                   <div className="flex items-center gap-3 mb-2">
                     <Icon name="Info" size={18} className="text-accent" />
-                    <span className="text-sm font-medium">О себе</span>
+                    <span className="text-sm font-medium">Статус</span>
                   </div>
-                  <p className="text-sm text-muted-foreground ml-8">Люблю путешествовать и программировать</p>
+                  <p className="text-sm text-muted-foreground ml-8">{currentUser.status}</p>
                 </div>
               </div>
             </div>
@@ -369,150 +492,19 @@ const Index = () => {
                 <Icon name="Languages" size={20} className="text-primary" />
                 Язык
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl h-12">
-                <Icon name="Shield" size={20} className="text-secondary" />
-                Безопасность
-              </Button>
-              <Button variant="ghost" className="w-full justify-start gap-3 rounded-xl h-12">
-                <Icon name="HardDrive" size={20} className="text-accent" />
-                Данные и хранилище
-              </Button>
             </div>
           )}
         </ScrollArea>
       </div>
 
-      <div className="flex-1 flex flex-col">
-        {selectedChat ? (
-          <>
-            <div className="h-16 border-b border-border flex items-center justify-between px-6">
-              <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Avatar className="w-10 h-10">
-                    <AvatarImage src={selectedChat.avatar} />
-                    <AvatarFallback>{selectedChat.name[0]}</AvatarFallback>
-                  </Avatar>
-                  {selectedChat.online && (
-                    <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 rounded-full border-2 border-background"></span>
-                  )}
-                </div>
-                <div>
-                  <h3 className="font-semibold">{selectedChat.name}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {selectedChat.online ? 'В сети' : 'Не в сети'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full hover:bg-primary hover:text-primary-foreground transition-all"
-                >
-                  <Icon name="Phone" size={20} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full hover:bg-secondary hover:text-secondary-foreground transition-all"
-                >
-                  <Icon name="Video" size={20} />
-                </Button>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full hover:bg-accent hover:text-accent-foreground transition-all"
-                >
-                  <Icon name="MoreVertical" size={20} />
-                </Button>
-              </div>
-            </div>
-
-            <ScrollArea className="flex-1 p-6">
-              <div className="space-y-4">
-                {messages.map((message) => (
-                  <div
-                    key={message.id}
-                    className={cn(
-                      'flex gap-3 animate-slide-up',
-                      message.sender === 'me' ? 'justify-end' : 'justify-start'
-                    )}
-                  >
-                    {message.sender === 'other' && (
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage src={selectedChat.avatar} />
-                        <AvatarFallback>{selectedChat.name[0]}</AvatarFallback>
-                      </Avatar>
-                    )}
-
-                    <div
-                      className={cn(
-                        'max-w-md rounded-2xl px-4 py-2.5',
-                        message.sender === 'me'
-                          ? 'gradient-primary text-white'
-                          : 'bg-muted text-foreground'
-                      )}
-                    >
-                      <p className="text-sm">{message.text}</p>
-                      <span className={cn(
-                        'text-xs block mt-1',
-                        message.sender === 'me' ? 'text-white/70' : 'text-muted-foreground'
-                      )}>
-                        {message.time}
-                      </span>
-                    </div>
-
-                    {message.sender === 'me' && (
-                      <Avatar className="w-8 h-8">
-                        <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=Me" />
-                        <AvatarFallback>Я</AvatarFallback>
-                      </Avatar>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </ScrollArea>
-
-            <div className="p-4 border-t border-border">
-              <div className="flex gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="rounded-full hover:bg-primary hover:text-primary-foreground transition-all"
-                >
-                  <Icon name="Paperclip" size={20} />
-                </Button>
-
-                <Input
-                  placeholder="Написать сообщение..."
-                  className="flex-1 rounded-full bg-muted border-0 px-6"
-                  value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-                />
-
-                <Button
-                  size="icon"
-                  className="rounded-full gradient-primary text-white hover:opacity-90 transition-all"
-                  onClick={handleSendMessage}
-                >
-                  <Icon name="Send" size={20} />
-                </Button>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex-1 flex items-center justify-center">
-            <div className="text-center">
-              <div className="w-32 h-32 mx-auto mb-6 rounded-full gradient-primary flex items-center justify-center">
-                <Icon name="MessageSquare" size={64} className="text-white" />
-              </div>
-              <h2 className="text-2xl font-bold mb-2">Выберите чат</h2>
-              <p className="text-muted-foreground">Начните общение с друзьями</p>
-            </div>
+      <div className="flex-1 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-32 h-32 mx-auto mb-6 rounded-full gradient-primary flex items-center justify-center">
+            <Icon name="MessageSquare" size={64} className="text-white" />
           </div>
-        )}
+          <h2 className="text-2xl font-bold mb-2">Найдите собеседника</h2>
+          <p className="text-muted-foreground">Используйте поиск, чтобы найти пользователей</p>
+        </div>
       </div>
     </div>
   );
