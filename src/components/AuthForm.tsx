@@ -72,6 +72,26 @@ const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    const latinOnlyRegex = /^[a-zA-Z0-9_.-]+$/;
+    
+    if (!latinOnlyRegex.test(registerUsername)) {
+      toast({
+        title: 'Ошибка валидации',
+        description: 'Никнейм должен содержать только английские буквы, цифры и символы _ . -',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (!latinOnlyRegex.test(registerPassword)) {
+      toast({
+        title: 'Ошибка валидации',
+        description: 'Пароль должен содержать только английские буквы, цифры и символы',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
     try {
       const response = await fetch(API_AUTH, {
         method: 'POST',
@@ -184,7 +204,7 @@ const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="register-username">Никнейм</Label>
+                <Label htmlFor="register-username">Никнейм (только английские буквы)</Label>
                 <Input
                   id="register-username"
                   type="text"
@@ -194,12 +214,13 @@ const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
                   required
                   minLength={3}
                   maxLength={50}
+                  pattern="[a-zA-Z0-9_.-]+"
                   className="rounded-xl"
                 />
               </div>
               
               <div className="space-y-2">
-                <Label htmlFor="register-password">Пароль</Label>
+                <Label htmlFor="register-password">Пароль (только английские буквы)</Label>
                 <Input
                   id="register-password"
                   type="password"
@@ -208,6 +229,7 @@ const AuthForm = ({ onAuthSuccess }: AuthFormProps) => {
                   onChange={(e) => setRegisterPassword(e.target.value)}
                   required
                   minLength={6}
+                  pattern="[a-zA-Z0-9_.-]+"
                   className="rounded-xl"
                 />
               </div>

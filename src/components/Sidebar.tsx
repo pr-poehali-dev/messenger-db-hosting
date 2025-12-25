@@ -4,8 +4,8 @@ import Icon from '@/components/ui/icon';
 import { cn } from '@/lib/utils';
 
 type SidebarProps = {
-  activeSection: 'chats' | 'contacts' | 'profile' | 'settings';
-  onSectionChange: (section: 'chats' | 'contacts' | 'profile' | 'settings') => void;
+  activeSection: 'chats' | 'contacts' | 'profile' | 'settings' | 'music';
+  onSectionChange: (section: 'chats' | 'contacts' | 'profile' | 'settings' | 'music') => void;
   onLogout: () => void;
 };
 
@@ -24,11 +24,35 @@ const Sidebar = ({ activeSection, onSectionChange, onLogout }: SidebarProps) => 
           size="icon"
           className={cn(
             'w-12 h-12 rounded-xl transition-all',
+            activeSection === 'chats' && 'bg-primary text-primary-foreground'
+          )}
+          onClick={() => onSectionChange('chats')}
+        >
+          <Icon name="MessageSquare" size={24} />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'w-12 h-12 rounded-xl transition-all',
             activeSection === 'contacts' && 'bg-primary text-primary-foreground'
           )}
           onClick={() => onSectionChange('contacts')}
         >
           <Icon name="Users" size={24} />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'w-12 h-12 rounded-xl transition-all',
+            activeSection === 'music' && 'bg-primary text-primary-foreground'
+          )}
+          onClick={() => onSectionChange('music')}
+        >
+          <Icon name="Music" size={24} />
         </Button>
 
         <Button

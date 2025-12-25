@@ -21,12 +21,13 @@ type SearchedUser = {
 };
 
 type ContentPanelProps = {
-  activeSection: 'chats' | 'contacts' | 'profile' | 'settings';
+  activeSection: 'chats' | 'contacts' | 'profile' | 'settings' | 'music';
   currentUser: User | null;
   searchQuery: string;
   onSearchQueryChange: (query: string) => void;
   searchResults: SearchedUser[];
   isSearching: boolean;
+  onStartChat: (user: SearchedUser) => void;
 };
 
 const ContentPanel = ({
@@ -36,6 +37,7 @@ const ContentPanel = ({
   onSearchQueryChange,
   searchResults,
   isSearching,
+  onStartChat,
 }: ContentPanelProps) => {
   return (
     <div className="w-96 bg-card border-r border-border flex flex-col">
@@ -92,6 +94,7 @@ const ContentPanel = ({
                     variant="ghost"
                     size="icon"
                     className="rounded-full hover:bg-primary hover:text-primary-foreground"
+                    onClick={() => onStartChat(user)}
                   >
                     <Icon name="MessageCircle" size={18} />
                   </Button>
